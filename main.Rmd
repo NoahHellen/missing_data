@@ -1,0 +1,261 @@
+---
+title: "missing_data"
+output:
+ html_document:
+   toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+#### Overview
+
+- This document teaches you the mathematical background and practical methods of categorising missing data.
+  - In [Mathematical background](#mathematical-background), you will learn the mathematical background behind missing data.
+  - In [Application](#application), you will apply this knowledge in practice on the 'airquality' dataset.
+
+#### Purpose
+
+- There is a lack of information on how to **practically** categorise missing data.
+
+#### Prerequisites
+
+- Probability theory
+- Statistics
+- R (programming language)
+
+#### Audience
+
+- Data professionals
+- Students
+
+#### Learning goal
+
+- To provide clear instructions on how to categorise missing data.
+
+#### Learning objectives
+
+- To understand the mathematical background for *MCAR, MAR, MNAR*.
+- To understand the **statistical** methods of categorising missing data in practice.
+
+#### Scope
+
+- Methods of **handling** this missing data is beyond the scope of this directory.
+
+#### Outcomes
+
+- You will be able to practically relate the mathematical formulation of missingness to a dataset.
+- You will be able to classify MCAR with Little's MCAR test.
+- You will be able to classify MAR with regression testing.
+- You will be able to classify MNAR by process of elimination.
+
+# Mathematical background
+
+<div align="center">
+  This chapter explores the mathematics of missing data.
+</div>
+
+#### Motivation
+
+To formalise the categorisation of missing data.
+
+#### Outline
+
+- [Notation](#notation) outlines the mathematical notation that will be adopted.
+- [MCAR, MAR, MNAR](#mcar-mar-mnar) outlines the probabilistic definitions of MCAR, MAR and MNAR.
+
+### Notation
+
+The missingness of data is assumed to be random; the formalism therefore takes a probabilistic perspective \[1].
+
+In the following, we consider a data matrix $D$ as a $k$-tuple with $n$-tuples as elements \[2].
+
+$$D = ((z_1),\cdots,(z_k))$$
+
+From this, we define $D_{mis}$, $D_{obs}$, and $M$ with the same dimensions \[1].
+
+$$D_{mis} = ((z_{1,mis}),\cdots,(z_{k,mis}))$$
+$$D_{obs} = ((z_{1,obs}),\cdots,(z_{k,obs})) \label{1}$$
+$$M = ((b_1),\cdots,(b_k))$$
+
+Note that $b_i \in \{0,1\}$ and $M \in \{0,1\}^{k \times n}$ equivalently.
+
+#### Example
+
+To make this notation explicit, we will consider the example of a data matrix $D = ((1,NA),(2,\text{L}))$.
+
+$$
+D =
+\begin{pmatrix}
+1 & NA \\
+2 & \text{L}
+\end{pmatrix}
+$$
+
+Note that $D$ is not a matrix in the mathematical sense (elements do not belong to a common set). However, it is useful for visualisation purposes.
+
+Let's now understand $D_{mis}$, $D_{obs}$, and $M$.
+
+```{=latex}
+\begin{equation}
+D_{mis} =
+\begin{pmatrix}
+ & NA \\
+ & \\
+\end{pmatrix}
+\quad
+D_{obs} =
+\begin{pmatrix}
+1 & \\
+2 & L \\
+\end{pmatrix}
+\quad
+M =
+\begin{pmatrix}
+1 & 0 \\
+1 & 1 \\
+\end{pmatrix}
+\end{equation}
+```
+
+The literature is inconsistent on the dimensions of $D_{obs}$ and $D_{mis}$. Since D_{obs} will later be used to perform regression on M, I have kept the same dimensions.
+
+### MCAR, MAR, MNAR
+
+The following results are taken from \[1].
+
+- **MCAR**
+    - $P(M|D) = P(M)$
+- **MAR**
+    - $P(M|D) = P(M|D_{obs})$
+- **MNAR**
+    - $P(M|D) = P(M|D)$
+
+The author of \[1] succintly summarises these definitions in the following table.
+
+$$
+\begin{array}{|c|c|}
+\hline
+\text{Missingness} & \text{You can predict } M \text{ with} \\
+\hline
+\text{MCAR} & - \\
+\hline
+\text{MA} & D_{obs} \\
+\hline
+\text{MNAR} & D_{obs} \text{ and } D_{mis}\\
+\hline
+\end{array}
+$$
+
+
+# Application
+
+<div align="center">
+  This chapter will apply the mathematics from [Mathematical background](#mathematical-background) to categorise missing data in the the `airquality` dataset.
+</div>
+
+#### Motivation
+
+To apply the mathematical formalism in practice.
+
+#### Outline
+
+- [Finding \(M, D, D_{obs}, D_{mis}\)](#finding-mdd_obsd_mis) dissects the `airquality` dataset to prepare for later missingness categorisation.
+- [MCAR](#mcar) demonstrates the statistical tests for MCAR in practice.
+- [MAR](#mar) demonstrates the statistical tests for MAR in practice.
+- [MNAR](#mnar) outlines how to determine MNAR.
+
+
+### Finding $M,D,D_{obs},D_{mis}$
+
+Load `airquality` dataset.
+
+```{r}
+data("airquality")
+d <- airquality
+```
+
+Quantify missingness present in dataset.
+
+```{r}
+summary(d)
+```
+
+Define $M, D_{obs}, \text{ and } D_{mis}$.
+
+```{r}
+m <- ifelse(is.na(d), 0, 1)
+
+# Simulate empty space with 0.
+d_mis <- ifelse(is.na(d), NA, 0)
+
+# Simulate empty space with 0.
+d_obs <- d
+d_obs[is.na(d_obs)] <- 0
+```
+
+Let's wrap up by explicitly representing  $D, M, D_{obs}, \text{ and } D_{mis}$ as in [Example](#example).
+
+Let's display $D$.
+
+```{r}
+head(d)
+```
+
+Let's display $M$.
+```{r}
+head(m)
+```
+
+Let's display $D_{obs}$.
+```{r}
+head(d_obs)
+```
+
+Let's display $D_{mis}$.
+```{r}
+head(d_mis)
+```
+
+Note that the data matrices $D_{obs}$ and $D_{mis}$ will not be used explicitly; this is merely for demonstration and conceptual purposes.
+
+### MCAR
+
+Little's MCAR test is a simple statistical test, with the null hypothesis that the missing data is MCAR.
+
+```{r}
+library(naniar)
+mcar_test(d)
+```
+
+A significant p-value implies the data is MCAR.
+
+### MAR
+
+In [Mathematical background](#mathematical-background), we stated that missing data is MAR if $M$ can be predicted with $D_{obs}$.
+
+Considering each column that contains missingness in $M$ separately, this is equivalent to at least one significant p-value when regressing the column on observed covariates.
+
+From the example in [Example](#example) we would be interested if the missingness in the second covariate (with values NA and L) can be predicted by the first covariate.
+
+This would mean regressing the first column $(1,2)$ from $D_{obs}$ onto the second column $(0,1)$ of $M$
+
+
+### MNAR
+
+
+
+
+# References
+
+[1] King G, Honaker J, Joseph A, Scheve K. Analyzing Incomplete Political Science
+Data: An Alternative Algorithm for Multiple Imputation. American Political
+Science Review. 2001;95(1):49–69. pages 4
+
+[2] Joseph G Ibrahim HZ, Tang N. Model Selection Criteria for Missing-Data
+Problems Using the EM Algorithm. Journal of the American Statistical Asso-
+ciation. 2008;103(484):1648-58. PMID: 19693282. Available from: https:
+//doi.org/10.1198/016214508000001057. pages 7
