@@ -15,7 +15,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 - This document teaches you the mathematical background and practical methods of categorising missing data.
   - In [Mathematical background](#mathematical-background), you will learn the mathematical background behind missing data.
-  - In [Application](#application), you will apply this knowledge in practice on the 'airquality' dataset.
+  - In [Application](#application), you will apply this knowledge in practice on the `airquality` dataset.
 
 #### Purpose
 
@@ -69,59 +69,15 @@ To formalise the categorisation of missing data.
 
 ### Notation
 
-The missingness of data is assumed to be random; the formalism therefore takes a probabilistic perspective \[1].
+The missingness of data is assumed to be random; the formalism therefore takes a probabilistic perspective \[1]. The literature is imprecise with the notation, so this section is brief.
 
-In the following, we consider a data matrix $D$ as a $k$-tuple with $n$-tuples as elements \[2].
+In the following, we consider a data matrix $D$ as a $k$-tuple of $n$-tuples.
 
 $$D = ((z_1),\cdots,(z_k))$$
 
-From this, we define $D_{mis}$, $D_{obs}$, and $M$ with the same dimensions \[1].
+We also define $M$ of the same dimension as the indicator matrix with entries $\{0,1\}$.
 
-$$D_{mis} = ((z_{1,mis}),\cdots,(z_{k,mis}))$$
-$$D_{obs} = ((z_{1,obs}),\cdots,(z_{k,obs})) \label{1}$$
-$$M = ((b_1),\cdots,(b_k))$$
-
-Note that $b_i \in \{0,1\}$ and $M \in \{0,1\}^{k \times n}$ equivalently.
-
-#### Example
-
-To make this notation explicit, we will consider the example of a data matrix $D = ((1,NA),(2,\text{L}))$.
-
-$$
-D =
-\begin{pmatrix}
-1 & NA \\
-2 & \text{L}
-\end{pmatrix}
-$$
-
-Note that $D$ is not a matrix in the mathematical sense (elements do not belong to a common set). However, it is useful for visualisation purposes.
-
-Let's now understand $D_{mis}$, $D_{obs}$, and $M$.
-
-```{=latex}
-\begin{equation}
-D_{mis} =
-\begin{pmatrix}
- & NA \\
- & \\
-\end{pmatrix}
-\quad
-D_{obs} =
-\begin{pmatrix}
-1 & \\
-2 & L \\
-\end{pmatrix}
-\quad
-M =
-\begin{pmatrix}
-1 & 0 \\
-1 & 1 \\
-\end{pmatrix}
-\end{equation}
-```
-
-The literature is inconsistent on the dimensions of $D_{obs}$ and $D_{mis}$. Since D_{obs} will later be used to perform regression on M, I have kept the same dimensions.
+Finally, $D_{obs}$ and $D_{mis}$ partition $D$ and are loosely defined \[1,2].
 
 ### MCAR, MAR, MNAR
 
@@ -163,91 +119,100 @@ To apply the mathematical formalism in practice.
 
 #### Outline
 
-- [Finding \(M, D, D_{obs}, D_{mis}\)](#finding-mdd_obsd_mis) dissects the `airquality` dataset to prepare for later missingness categorisation.
 - [MCAR](#mcar) demonstrates the statistical tests for MCAR in practice.
 - [MAR](#mar) demonstrates the statistical tests for MAR in practice.
 - [MNAR](#mnar) outlines how to determine MNAR.
 
 
-### Finding $M,D,D_{obs},D_{mis}$
+#### Preamble
+
+Load required libraries.
+```{r}
+library(naniar)
+```
 
 Load `airquality` dataset.
 
 ```{r}
 data("airquality")
-d <- airquality
 ```
 
-Quantify missingness present in dataset.
+Define $M$ and $D$.
+
+```{r}
+d <- airquality
+m <- ifelse(is.na(d), 0, 1)
+m <- data.frame(m)
+```
+
+Examine missingness in dataset.
 
 ```{r}
 summary(d)
 ```
 
-Define $M, D_{obs}, \text{ and } D_{mis}$.
-
-```{r}
-m <- ifelse(is.na(d), 0, 1)
-
-# Simulate empty space with 0.
-d_mis <- ifelse(is.na(d), NA, 0)
-
-# Simulate empty space with 0.
-d_obs <- d
-d_obs[is.na(d_obs)] <- 0
-```
-
-Let's wrap up by explicitly representing  $D, M, D_{obs}, \text{ and } D_{mis}$ as in [Example](#example).
-
-Let's display $D$.
-
-```{r}
-head(d)
-```
-
-Let's display $M$.
-```{r}
-head(m)
-```
-
-Let's display $D_{obs}$.
-```{r}
-head(d_obs)
-```
-
-Let's display $D_{mis}$.
-```{r}
-head(d_mis)
-```
-
-Note that the data matrices $D_{obs}$ and $D_{mis}$ will not be used explicitly; this is merely for demonstration and conceptual purposes.
-
 ### MCAR
 
-Little's MCAR test is a simple statistical test, with the null hypothesis that the missing data is MCAR.
+We use Little's MCAR test to test for MCAR.
 
 ```{r}
-library(naniar)
 mcar_test(d)
 ```
 
-A significant p-value implies the data is MCAR.
+A significant $p$-value implies the data is MCAR.
 
 ### MAR
 
-In [Mathematical background](#mathematical-background), we stated that missing data is MAR if $M$ can be predicted with $D_{obs}$.
+We use Logistic regression to test for MAR.
 
-Considering each column that contains missingness in $M$ separately, this is equivalent to at least one significant p-value when regressing the column on observed covariates.
+1. Choose covariate $X_i$ that contains missing data and isolate $M_i$, the $i_{th}$ column of $M$.
+2. Regress $M_i$ on each covariate in $D_{obs}$; equivalent to regressing $M_i$ on $D$ after pairwise deletion.
+3. Repeat for every $i$.
 
-From the example in [Example](#example) we would be interested if the missingness in the second covariate (with values NA and L) can be predicted by the first covariate.
+#### Ozone
 
-This would mean regressing the first column $(1,2)$ from $D_{obs}$ onto the second column $(0,1)$ of $M$
+```{r}
+# Isolate $M_1$ since `Ozone` contains missing data.
+m_1 <- m$Ozone
 
+# Initialie empty list for p-values.
+p_vals_ozone <- rep(NA, ncol(d))
+
+# Perform logistic regression.
+for (j in 1:ncol(d)) {
+  s <- summary(lm(m_1 ~ d[, j]))
+  p_vals_ozone[j] <- s$coefficients[2, 4]
+}
+```
+
+#### Solar
+
+```{r}
+# Isolate $M_2$ since `Solar.R` contains missing data.
+m_2 <- m$Solar.R
+
+# Initialie empty list for p-values.
+p_vals_solar <- rep(NA, ncol(d))
+
+# Perform logistic regression.
+for (j in 1:ncol(d)) {
+  s <- summary(lm(m_2 ~ d[, j]))
+  p_vals_solar[j] <- s$coefficients[2, 4]
+}
+```
+
+Print both sets of $p$-values.
+
+```{r}
+p_vals_ozone
+p_vals_solar
+```
+
+If each set contains at least one significant $p$-value, this implies the data is MAR.
 
 ### MNAR
 
-
-
+If neither MCAR or MAR holds, then the missing data is MNAR.
 
 # References
 
